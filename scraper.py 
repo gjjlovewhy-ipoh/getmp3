@@ -2,97 +2,60 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import os
-from datetime import datetime
 import urllib3
 
-# ============== 核心配置 ==============
+# 配置
 BASE_URL = "https://pan.vma.cc/pan/index.php"
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Referer": "https://pan.vma.cc/"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
-# 抓取页码 1-10
 START_PAGE = 1
 END_PAGE = 10
-# 输出文件（根目录）
 OUTPUT_PATH = "mp3_links.txt"
-# 每小时执行一次（秒）
-SCAN_INTERVAL = 3600
-# 忽略SSL警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def crawl_single_page(page):
-    """抓取单页MP3外链（强制解析复制按钮链接）"""
     try:
         params = {"page": page, "kw": ".mp3"}
         resp = requests.get(
             BASE_URL,
             params=params,
             headers=HEADERS,
-            timeout=20,
+            timeout=15,
             verify=False
         )
-        resp.raise_for_status()
+        resp.encoding = "utf-8"
         soup = BeautifulSoup(resp.text, "html.parser")
-        result = []
-
-        # 解析所有复制按钮对应的下载链接
-        for btn in soup.find_all("button", onclick=True):
+        res = []
+        # 匹配复制按钮里的链接
+        for btn in soup.find_all(onclick=True):
             onclick = btn.get("onclick", "")
-            if "copyToClipboard" in onclick and "'" in onclick:
-                url = onclick.split("'")[1]
-                if ".mp3" in url:
-                    # 向上查找文件名
-                    tr = btn.find_parent("tr")
-                    filename = tr.find_all("td")[0].get_text(strip=True) if tr else "unknown.mp3"
-                    result.append({
-                        "filename": filename,
-                        "url": url,
-                        "page": page,
-                        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    })
-        print(f"📄 第{page}页 | 抓取到 {len(result)} 条MP3")
-        return result
+            if "copyToClipboard" in onclick:
+                parts = onclick.split("'")
+                if len(parts) >= 2:
+                    link = parts[1].strip()
+                    if link.endswith(".mp3"):
+                        res.append(link)
+        print(f"第{page}页 抓到 {len(res)} 条")
+        return res
     except Exception as e:
-        print(f"❌ 第{page}页失败: {str(e)}")
+        print(f"第{page}页失败: {e}")
         return []
 
-def crawl_all_pages():
-    """批量抓取1-10页"""
-    print(f"\n========== 开始扫描 {START_PAGE}-{END_PAGE} 页 ==========")
-    all_data = []
+def main():
+    all_links = []
     for page in range(START_PAGE, END_PAGE + 1):
-        data = crawl_single_page(page)
-        all_data.extend(data)
-        time.sleep(1)
-    return all_data
-
-def save_to_txt(data):
-    """保存到根目录TXT（覆盖更新）"""
-    try:
-        with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-            f.write(f"# MP3抓取列表 | 更新时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"# 共抓取：{len(data)} 条\n\n")
-            for item in data:
-                f.write(f"【页{item['page']}】{item['filename']}\n")
-                f.write(f"{item['url']}\n")
-                f.write(f"抓取时间：{item['time']}\n")
-                f.write("-" * 80 + "\n")
-        print(f"\n💾 已保存到 {OUTPUT_PATH} | 共 {len(data)} 条链接")
-    except Exception as e:
-        print(f"❌ 保存失败：{str(e)}")
-
-def run_loop():
-    """循环执行：每小时一次"""
-    while True:
-        data = crawl_all_pages()
-        save_to_txt(data)
-        print(f"\n⏳ 等待 {SCAN_INTERVAL//3600} 小时后下一次扫描...\n")
-        time.sleep(SCAN_INTERVAL)
+        links = crawl_single_page(page)
+        all_links.extend(links)
+        time.sleep(1.5)
+    # 去重
+    all_links = list(set(all_links))
+    # 保存到txt
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+        f.write("=== MP3 外链列表 自动抓取 ===\n")
+        for url in all_links:
+            f.write(url + "\n")
+    print(f"抓取完成，共去重后 {len(all_links)} 条，已保存到 {OUTPUT_PATH}")
 
 if __name__ == "__main__":
-    print("🚀 MP3自动抓取服务启动")
-    print(f"📌 扫描范围：{START_PAGE}-{END_PAGE}页")
-    print(f"📌 执行间隔：每{SCAN_INTERVAL//3600}小时")
-    print(f"📌 输出文件：{OUTPUT_PATH}\n")
-    run_loop()
+    main()
