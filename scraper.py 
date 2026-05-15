@@ -4,7 +4,6 @@ import time
 import os
 import urllib3
 
-# 配置
 BASE_URL = "https://pan.vma.cc/pan/index.php"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -12,50 +11,44 @@ HEADERS = {
 START_PAGE = 1
 END_PAGE = 10
 OUTPUT_PATH = "mp3_links.txt"
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+urllib3.disable_warnings()
 
 def crawl_single_page(page):
     try:
         params = {"page": page, "kw": ".mp3"}
-        resp = requests.get(
-            BASE_URL,
-            params=params,
-            headers=HEADERS,
-            timeout=15,
-            verify=False
-        )
+        resp = requests.get(BASE_URL, params=params, headers=HEADERS, timeout=12, verify=False)
         resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(resp.text, "lxml")
         res = []
-        # 匹配复制按钮里的链接
-        for btn in soup.find_all(onclick=True):
-            onclick = btn.get("onclick", "")
-            if "copyToClipboard" in onclick:
-                parts = onclick.split("'")
-                if len(parts) >= 2:
-                    link = parts[1].strip()
-                    if link.endswith(".mp3"):
-                        res.append(link)
-        print(f"第{page}页 抓到 {len(res)} 条")
+        for tag in soup.find_all(attrs={"onclick": True}):
+            onclick = tag.get("onclick", "")
+            if "copyToClipboard" not in onclick:
+                continue
+            arr = onclick.split("'")
+            if len(arr) < 2:
+                continue
+            link = arr[1].strip()
+            if link.lower().endswith(".mp3"):
+                res.append(link)
+        print(f"第{page}页：{len(res)} 条")
         return res
     except Exception as e:
-        print(f"第{page}页失败: {e}")
+        print(f"第{page}页异常：{str(e)}")
         return []
 
 def main():
     all_links = []
-    for page in range(START_PAGE, END_PAGE + 1):
-        links = crawl_single_page(page)
-        all_links.extend(links)
-        time.sleep(1.5)
+    for p in range(START_PAGE, END_PAGE + 1):
+        all_links.extend(crawl_single_page(p))
+        time.sleep(1)
     # 去重
-    all_links = list(set(all_links))
-    # 保存到txt
+    all_links = sorted(list(set(all_links)))
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        f.write("=== MP3 外链列表 自动抓取 ===\n")
+        f.write("=== MP3 自动抓取外链列表 ===\n")
+        f.write(f"总数：{len(all_links)} 条\n\n")
         for url in all_links:
             f.write(url + "\n")
-    print(f"抓取完成，共去重后 {len(all_links)} 条，已保存到 {OUTPUT_PATH}")
+    print(f"完成！共 {len(all_links)} 条已写入 {OUTPUT_PATH}")
 
 if __name__ == "__main__":
     main()
