@@ -1,1 +1,61 @@
+import requests
+from bs4 import BeautifulSoup
+import os
+import time
 
+# 目标网盘的基础URL
+BASE_URL = "https://pan.vma.cc/pan/index.php"
+OUTPUT_FILE = "mp3_links.txt"
+
+def scrape_mp3_links():
+    all_links = []
+    # 设置请求头，模拟真实浏览器，防止被网站拦截
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    print("开始抓取 1-10 页的 MP3 链接...")
+    
+    for page in range(1, 11):
+        params = {
+            "page": page,
+            "kw": ".mp3"
+        }
+        try:
+            print(f"正在抓取第 {page} 页...")
+            response = requests.get(BASE_URL, params=params, headers=headers, timeout=10)
+            response.raise_for_status()
+            response.encoding = 'utf-8' # 根据网站实际编码调整，通常是 utf-8 或 gbk
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # 【重要】这里需要你手动替换成真实的 CSS 选择器！
+            # 打开网页按 F12，找到包含 MP3 链接的 <a> 标签或按钮，右键 -> Copy -> Copy selector
+            # 假设链接在 class 为 "file-link" 的 a 标签的 href 属性中：
+            # links = soup.select('a.file-link') 
+            
+            # 下面是一个通用的查找所有包含 .mp3 的链接的兜底方案：
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                if '.mp3' in href:
+                    # 如果是相对路径，补全为绝对路径
+                    if href.startswith('/'):
+                        href = "https://pan.vma.cc" + href
+                    all_links.append(href)
+            
+            # 礼貌延迟，防止请求过快被禁IP
+            time.sleep(1)
+            
+        except Exception as e:
+            print(f"第 {page} 页抓取失败: {e}")
+
+    # 去重并写入文件
+    unique_links = list(set(all_links))
+    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+        for link in unique_links:
+            f.write(link + '\n')
+            
+    print(f"抓取完成！共找到 {len(unique_links)} 个 MP3 链接，已保存至 {OUTPUT_FILE}")
+
+if __name__ == "__main__":
+    scrape_mp3_links()
