@@ -4,6 +4,10 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
 
+# 强制使用 Node24 消除警告
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: write
 
@@ -11,26 +15,27 @@ jobs:
   crawl:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: 设置Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.10"
 
-      - name: Install dependencies
+      - name: 安装依赖
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 urllib3
+          pip install requests beautifulsoup4 urllib3 lxml
 
-      - name: Run crawler
+      - name: 运行抓取脚本
         run: python mp3_crawler.py
+        continue-on-error: false
 
-      - name: Commit & Push
+      - name: 提交更新文件
         run: |
-          git config user.name "Actions Bot"
-          git config user.email "bot@github.com"
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
           git add mp3_links.txt
-          git commit -m "Auto update mp3 links" || echo "No changes to commit"
+          git commit -m "Auto update mp3 links $(date +'%Y-%m-%d %H:%M:%S')" 2>/dev/null || true
           git push
